@@ -3,17 +3,21 @@
 " Home: http://www.vim.org/scripts/script.php?script_id=2891
 " Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 " Version: 1.00, 2009-12-19
+" Version: 1.1 2015 ingar.smedstad@uib.no
+" Changed keymaps to <leader>z* and added decrement
 " Description: [[[
 " This plugin helps insert start fold markers with level numbers: {{{1, {{{2,
 " {{{3, and so on. It creates the following global mappings for Normal and
 " Visual modes:
 "
-" <Leader>fm    Create start fold marker with level number. It is apppended to
+" <Leader>zm    Create start fold marker with level number. It is apppended to
 "               the end of current line. The level is set to that of the
 "               previous start fold marker with level number (if any). The
 "               start fold marker string is obtained from option 'foldmarker'.
 "
-" <Leader>fM    Create fold marker as child: level number is incremented by 1.
+" <Leader>zM    Create fold marker as child: level number is incremented by 1.
+"
+" <Leader>zp    Create fold marker as parent: level is decremented by 1.
 "
 " <Leader>cm    Create fold marker as comment according to buffer's filetype.
 "               E.g., if filetype is html, <!--{{{1--> is appended. Dictionary
@@ -23,6 +27,8 @@
 "               want, you can edit dictionary s:commentstrings.
 "
 " <Leader>cM    Create fold marker as comment and as child.
+"
+" <Leader>cp    Create a fold marker comment as parent.
 " ]]]
 
 if exists("g:loaded_create_start_fold_marker")
@@ -33,54 +39,60 @@ let g:loaded_create_start_fold_marker = 'v1.0'
 let s:cpo_save = &cpo
 set cpo&vim
 
-nnoremap <silent> <Leader>fm :call <SID>CreateMarker()<CR>
-vnoremap <silent> <Leader>fm :call <SID>CreateMarker()<CR>
-nnoremap <silent> <Leader>fM :call <SID>CreateMarker('as_child')<CR>
-vnoremap <silent> <Leader>fM :call <SID>CreateMarker('as_child')<CR>
+nnoremap <silent> <Leader>zm :call <SID>CreateMarker()<CR>
+vnoremap <silent> <Leader>zm :call <SID>CreateMarker()<CR>
+nnoremap <silent> <Leader>zM :call <SID>CreateMarker('as_child')<CR>
+vnoremap <silent> <Leader>zM :call <SID>CreateMarker('as_child')<CR>
+nnoremap <silent> <Leader>zp :call <SID>CreateMarker('as_parent')<CR>
+vnoremap <silent> <Leader>zp :call <SID>CreateMarker('as_parent')<CR>
 nnoremap <silent> <Leader>cm :call <SID>CreateMarker('as_comment')<CR>
 vnoremap <silent> <Leader>cm :call <SID>CreateMarker('as_comment')<CR>
 nnoremap <silent> <Leader>cM :call <SID>CreateMarker('as_child', 'as_comment')<CR>
 vnoremap <silent> <Leader>cM :call <SID>CreateMarker('as_child', 'as_comment')<CR>
+nnoremap <silent> <Leader>cp :call <SID>CreateMarker('as_parent', 'as_comment')<CR>
+vnoremap <silent> <Leader>cp :call <SID>CreateMarker('as_parent', 'as_comment')<CR>
 
 let s:commentstrings = {
-    \ 'vim': '"%s',
-    \ 'python': '#%s',
-    \ 'perl': '#%s',
-    \ 'ruby': '#%s',
-    \ 'c': '//%s',
-    \ 'tex': '%%s',
-    \ 'html': "<!--%s-->" }
+      \ 'vim': '"%s',
+      \ 'python': '#%s',
+      \ 'perl': '#%s',
+      \ 'ruby': '#%s',
+      \ 'c': '//%s',
+      \ 'tex': '%%s',
+      \ 'html': "<!--%s-->" }
 
 func! s:CreateMarker(...)
-    if &ma==0 || &ro==1
-        echo 'create_start_fold_marker.vim: BUFFER IS NOT EDITABLE'
-        return
+  if &ma==0 || &ro==1
+    echo 'create_start_fold_marker.vim: BUFFER IS NOT EDITABLE'
+    return
+  endif
+  let level = 1
+  let [comment1, comment2] = ['','']
+  let marker = split(&foldmarker, ',')[0]
+  "let lnum = search('{{{\d\+', 'bnW') "}}}
+  let [lnum, cnum] = searchpos('\V\C'.marker.'\d\+', 'bnW')
+  if lnum
+    let level = matchlist(getline(lnum), '\V\C'.marker.'\(\d\+\)', cnum-1)[1]
+    if index(a:000, 'as_child')>=0
+      let level+=1
+    elseif index(a:000, 'as_parent')>=0
+      let level-=1
     endif
-    let level = 1
-    let [comment1, comment2] = ['','']
-    let marker = split(&foldmarker, ',')[0]
-    "let lnum = search('{{{\d\+', 'bnW') "}}}
-    let [lnum, cnum] = searchpos('\V\C'.marker.'\d\+', 'bnW')
-    if lnum
-        let level = matchlist(getline(lnum), '\V\C'.marker.'\(\d\+\)', cnum-1)[1]
-        if index(a:000, 'as_child')>=0
-            let level+=1
-        endif
-    endif
+  endif
 
-    if index(a:000, 'as_comment')>=0
-        if has_key(s:commentstrings, &ft)
-            let [comment1, comment2] = split(s:commentstrings[&ft], '\V\C%s', 1)
-        else
-            let [comment1, comment2] = split(&commentstring, '\V\C%s', 1)
-        endif
+  if index(a:000, 'as_comment')>=0
+    if has_key(s:commentstrings, &ft)
+      let [comment1, comment2] = split(s:commentstrings[&ft], '\V\C%s', 1)
+    else
+      let [comment1, comment2] = split(&commentstring, '\V\C%s', 1)
     endif
+  endif
 
-"    if &ft==#'text'
-"        call setline('.', '--- '.getline('.').' ---')
-"        normal! 4l
-"    endif
-    call setline('.', getline('.').' '.comment1.marker.level.comment2)
+  "    if &ft==#'text'
+  "        call setline('.', '--- '.getline('.').' ---')
+  "        normal! 4l
+  "    endif
+  call setline('.', getline('.').' '.comment1.marker.level.comment2)
 endfunc
 
 let &cpo = s:cpo_save
